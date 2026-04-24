@@ -1,0 +1,89 @@
+version: "3.9"
+
+# LumiEdu skeleton compose (placeholder only)
+# Service dependency flow:
+# frontend -> api -> (stt-service, llm-service, tts-service) -> (postgres, redis)
+
+services:
+  frontend:
+    build:
+      context: ./apps/frontend
+      dockerfile: Dockerfile
+    container_name: lumiedu-frontend
+    depends_on:
+      - api
+    networks:
+      - lumiedu-net
+
+  api:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    container_name: lumiedu-api
+    depends_on:
+      - stt-service
+      - llm-service
+      - tts-service
+      - postgres
+      - redis
+    networks:
+      - lumiedu-net
+
+  stt-service:
+    build:
+      context: ./services/stt-service
+      dockerfile: Dockerfile
+    container_name: lumiedu-stt
+    networks:
+      - lumiedu-net
+
+  llm-service:
+    # NOTE: Ollama runtime service placeholder.
+    # Replace with final image/build and model mount in config-ready step.
+    image: ollama/ollama:latest
+    container_name: lumiedu-llm
+    networks:
+      - lumiedu-net
+
+  tts-service:
+    build:
+      context: ./services/tts-service
+      dockerfile: Dockerfile
+    container_name: lumiedu-tts
+    networks:
+      - lumiedu-net
+
+  postgres:
+    image: postgres:16
+    container_name: lumiedu-postgres
+    volumes:
+      - lumiedu-postgres-data:/var/lib/postgresql/data
+    networks:
+      - lumiedu-net
+
+  redis:
+    image: redis:7
+    container_name: lumiedu-redis
+    volumes:
+      - lumiedu-redis-data:/data
+    networks:
+      - lumiedu-net
+
+  reverse-proxy:
+    image: nginx:1.27-alpine
+    container_name: lumiedu-proxy
+    depends_on:
+      - frontend
+      - api
+    networks:
+      - lumiedu-net
+
+networks:
+  lumiedu-net:
+    name: lumiedu-net
+
+volumes:
+  lumiedu-postgres-data:
+    name: lumiedu-postgres-data
+  lumiedu-redis-data:
+    name: lumiedu-redis-data
