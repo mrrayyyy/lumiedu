@@ -1,2 +1,8 @@
 fastapi
 uvicorn[standard]
+httpx
+sqlalchemy
+asyncpg
+redis
+pydantic-settings
+python-jose[cryptography]
