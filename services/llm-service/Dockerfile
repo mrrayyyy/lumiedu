@@ -1,9 +1,12 @@
-# Skeleton Dockerfile for LLM service adapter (Ollama integration)
-# TODO(config-ready): decide between direct ollama image or adapter wrapper.
-
 FROM python:3.11-slim
 
 WORKDIR /app
 
-# Placeholder command for skeleton phase
-CMD ["sh", "-c", "echo 'llm adapter skeleton container' && sleep infinity"]
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY main.py .
+
+EXPOSE 8102
+
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8102"]

@@ -1,17 +1,21 @@
 version: "3.9"
 
-# LumiEdu skeleton compose (placeholder only)
-# Service dependency flow:
-# frontend -> api -> (stt-service, llm-service, tts-service) -> (postgres, redis)
-
 services:
   frontend:
     build:
       context: ./apps/frontend
       dockerfile: Dockerfile
     container_name: lumiedu-frontend
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
     depends_on:
-      - api
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
     networks:
       - lumiedu-net
 
@@ -20,12 +24,40 @@ services:
       context: ./apps/api
       dockerfile: Dockerfile
     container_name: lumiedu-api
+    ports:
+      - "${API_PORT:-8000}:8000"
+    environment:
+      APP_NAME: ${APP_NAME:-LumiEdu}
+      APP_ENV: ${APP_ENV:-development}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://lumiedu:change_me@postgres:5432/lumiedu}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      STT_URL: ${STT_URL:-http://stt-service:8101}
+      LLM_URL: ${LLM_URL:-http://llm-service:8102}
+      TTS_URL: ${TTS_URL:-http://tts-service:8103}
+      REQUEST_TIMEOUT_SECONDS: ${REQUEST_TIMEOUT_SECONDS:-15}
+      MAX_CONCURRENT_SESSIONS: ${MAX_CONCURRENT_SESSIONS:-3}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-change_me_secret}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-60}
+      AUTH_DISABLED: ${AUTH_DISABLED:-false}
+      BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-admin@lumiedu.local}
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-Admin123!}
     depends_on:
-      - stt-service
-      - llm-service
-      - tts-service
-      - postgres
-      - redis
+      stt-service:
+        condition: service_healthy
+      llm-service:
+        condition: service_healthy
+      tts-service:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys;sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status==200 else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
     networks:
       - lumiedu-net
 
@@ -34,14 +66,33 @@ services:
       context: ./services/stt-service
       dockerfile: Dockerfile
     container_name: lumiedu-stt
+    ports:
+      - "${STT_PORT:-8101}:8101"
+    environment:
+      STT_PROVIDER_URL: ${STT_PROVIDER_URL:-}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys;sys.exit(0 if urllib.request.urlopen('http://localhost:8101/health').status==200 else 1)"]
+      interval: 10s
+      timeout: 4s
+      retries: 8
     networks:
       - lumiedu-net
 
   llm-service:
-    # NOTE: Ollama runtime service placeholder.
-    # Replace with final image/build and model mount in config-ready step.
-    image: ollama/ollama:latest
+    build:
+      context: ./services/llm-service
+      dockerfile: Dockerfile
     container_name: lumiedu-llm
+    ports:
+      - "8102:8102"
+    environment:
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2:3b}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys;sys.exit(0 if urllib.request.urlopen('http://localhost:8102/health').status==200 else 1)"]
+      interval: 10s
+      timeout: 4s
+      retries: 8
     networks:
       - lumiedu-net
 
@@ -50,31 +101,69 @@ services:
       context: ./services/tts-service
       dockerfile: Dockerfile
     container_name: lumiedu-tts
+    ports:
+      - "${TTS_PORT:-8103}:8103"
+    environment:
+      TTS_PROVIDER_URL: ${TTS_PROVIDER_URL:-}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys;sys.exit(0 if urllib.request.urlopen('http://localhost:8103/health').status==200 else 1)"]
+      interval: 10s
+      timeout: 4s
+      retries: 8
     networks:
       - lumiedu-net
 
   postgres:
     image: postgres:16
     container_name: lumiedu-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-lumiedu}
+      POSTGRES_USER: ${POSTGRES_USER:-lumiedu}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - lumiedu-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-lumiedu} -d ${POSTGRES_DB:-lumiedu}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
     networks:
       - lumiedu-net
 
   redis:
     image: redis:7
     container_name: lumiedu-redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
     volumes:
       - lumiedu-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 8
     networks:
       - lumiedu-net
 
   reverse-proxy:
     image: nginx:1.27-alpine
     container_name: lumiedu-proxy
+    ports:
+      - "${PROXY_PORT:-80}:80"
     depends_on:
-      - frontend
-      - api
+      frontend:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    volumes:
+      - ./infra/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost/ > /dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
     networks:
       - lumiedu-net
 

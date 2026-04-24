@@ -1,9 +1,12 @@
-# Skeleton Dockerfile for TTS service (GPT-SoVITS adapter)
-# TODO(config-ready): install model/runtime and expose API endpoint.
-
 FROM python:3.11-slim
 
 WORKDIR /app
 
-# Placeholder command for skeleton phase
-CMD ["sh", "-c", "echo 'tts skeleton container' && sleep infinity"]
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY main.py .
+
+EXPOSE 8103
+
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8103"]
