@@ -1,0 +1,36 @@
+# Directories to ignore
+node_modules/
+.next/
+.git/
+dist/
+build/
+out/
+coverage/
+
+# Files to ignore
+*.lock
+*.log
+*.min.js
+*.min.css
+*.map
+.DS_Store
+.env*
+!.env.example
+
+# Large files
+*.svg
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.ico
+*.woff
+*.woff2
+*.eot
+*.ttf
+*.otf
+
+# Generated files
+pnpm-lock.yaml
+package-lock.json
+yarn.lock 
