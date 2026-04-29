@@ -1,36 +1,100 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# LumiEdu Frontend
 
-## Getting Started
+Giao dien web cho nen tang gia su AI LumiEdu. Xay dung tren Next.js voi React va TypeScript.
 
-First, run the development server:
+## Cau truc
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+```
+app/
+├── (app)/                  # Route group voi Sidebar layout
+│   ├── dashboard/page.tsx  # Trang chu: metrics, danh sach phien, tao phien moi
+│   ├── progress/page.tsx   # Theo doi tien do hoc sinh
+│   └── layout.tsx          # Sidebar + main content wrapper
+├── login/page.tsx          # Trang dang nhap
+├── session/page.tsx        # Giao dien chat tutoring (full-screen, khong sidebar)
+├── page.tsx                # Redirect -> /login
+└── layout.tsx              # Root layout (AuthProvider, fonts, metadata)
+
+components/
+├── chat/
+│   ├── chat-bubble.tsx     # Tin nhan hoc sinh/AI voi audio playback
+│   ├── chat-input.tsx      # Text input + mic button + send button
+│   ├── session-header.tsx  # Header: topic, learner, WebSocket status, end
+│   └── typing-indicator.tsx # Animation khi AI dang tra loi
+├── ui/
+│   ├── loading-spinner.tsx # Loading animation
+│   ├── error-alert.tsx     # Error message display
+│   ├── stat-card.tsx       # Dashboard metric card
+│   └── session-card.tsx    # Session list item card
+├── sidebar.tsx             # Navigation sidebar (Dashboard, Tien do, Dang xuat)
+└── icons.tsx               # SVG icon components
+
+lib/
+├── api.ts                  # Centralized API client (fetch, error handling)
+├── auth-context.tsx        # React Context: JWT token, login/logout, localStorage
+├── types.ts                # TypeScript interfaces (Session, Turn, Progress, etc.)
+└── hooks/
+    ├── use-require-auth.ts # Hook: redirect ve /login neu chua dang nhap
+    ├── use-poll.ts         # Hook: polling interval cho metrics refresh
+    └── use-voice-recorder.ts # Hook: Web Audio API recording + base64 encoding
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Chay development
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm install
+npm run dev
+# -> http://localhost:3000
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Luu y: Frontend goi API qua duong dan tuong doi `/api`. Khi chay ngoai Docker, can nginx hoac proxy de route `/api` toi backend API (port 8000).
 
-## Learn More
+**Khuyen nghi**: Chay toan bo stack qua Docker Compose tu thu muc goc:
+```bash
+cd ../..
+docker compose up --build -d
+# -> http://localhost (qua nginx)
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Cac lenh
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+npm run dev       # Development server voi hot reload
+npm run build     # Production build
+npm run start     # Chay production build
+npm run lint      # ESLint check
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Luong chinh
 
-## Deploy on Vercel
+1. **Login** (`/login`): Nhap email + password -> nhan JWT -> luu localStorage
+2. **Dashboard** (`/dashboard`): Xem metrics, danh sach phien, click "Phien hoc moi"
+3. **Session** (`/session?id=...`): Chat text hoac voice voi AI tutor
+4. **Progress** (`/progress`): Nhap ma hoc sinh -> xem tien do, chu de da hoc
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## API Client
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Tat ca API calls di qua `lib/api.ts`:
+
+```typescript
+import { login, createSession, submitTurn, listSessions, getProgress } from '@/lib/api';
+
+// Login
+const { access_token } = await login(email, password);
+
+// Tao phien hoc
+const session = await createSession(token, learnerId, topic);
+
+// Gui cau hoi
+const turn = await submitTurn(token, sessionId, { text_input: "1/2 + 1/3?" });
+
+// Xem tien do
+const progress = await getProgress(token, learnerId);
+```
+
+## Voice Recording
+
+Hook `useVoiceRecorder` su dung Web Audio API:
+- MediaRecorder de ghi am tu microphone
+- FileReader de encode sang base64 (khong bi crash voi audio lon)
+- Gui audio_base64 qua `submitTurn` API
