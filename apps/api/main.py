@@ -12,13 +12,28 @@ from config import settings
 from db import (
     close_connections,
     ensure_db_ready,
+    get_all_sessions,
+    get_learner_progress,
+    get_sessions_by_learner,
+    get_turns_by_session,
     get_user_credentials,
     ping_dependencies,
     redis_client,
     save_session,
     save_turn,
+    update_session_status,
 )
-from schemas import LoginRequest, SessionCreateRequest, SessionResponse, TokenResponse, TurnRequest, TurnResponse
+from schemas import (
+    LoginRequest,
+    ProgressResponse,
+    SessionCreateRequest,
+    SessionListResponse,
+    SessionResponse,
+    TokenResponse,
+    TurnHistoryItem,
+    TurnRequest,
+    TurnResponse,
+)
 from services import VoiceOrchestrator
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -105,6 +120,110 @@ async def create_session(
         logger.warning("redis_session_write_failed", extra={"session_id": session.session_id})
     logger.info("session_created", extra={"session_id": session.session_id, "user_email": user_email})
     return session
+
+
+@app.get("/api/v1/sessions", response_model=SessionListResponse)
+async def list_sessions(
+    learner_id: str | None = None,
+    _user_email: str = Depends(get_current_user_email),
+) -> SessionListResponse:
+    if learner_id:
+        rows = await get_sessions_by_learner(learner_id)
+    else:
+        rows = await get_all_sessions()
+    sessions = [
+        SessionResponse(
+            session_id=str(r["session_id"]),
+            learner_id=str(r["learner_id"]),
+            lesson_topic=str(r["lesson_topic"]),
+            status=str(r["status"]),
+            created_at=r["created_at"],
+        )
+        for r in rows
+    ]
+    for s in sessions:
+        if s.session_id in active_sessions:
+            s.status = active_sessions[s.session_id].status
+    return SessionListResponse(sessions=sessions, total=len(sessions))
+
+
+@app.get("/api/v1/sessions/{session_id}", response_model=SessionResponse)
+async def get_session(
+    session_id: str,
+    _user_email: str = Depends(get_current_user_email),
+) -> SessionResponse:
+    session = active_sessions.get(session_id)
+    if session is not None:
+        return session
+    raise HTTPException(status_code=404, detail="Session not found")
+
+
+@app.get("/api/v1/sessions/{session_id}/turns", response_model=list[TurnHistoryItem])
+async def get_session_turns(
+    session_id: str,
+    _user_email: str = Depends(get_current_user_email),
+) -> list[TurnHistoryItem]:
+    rows = await get_turns_by_session(session_id)
+    return [
+        TurnHistoryItem(
+            transcript=str(r["transcript"]),
+            assistant_response=str(r["assistant_response"]),
+            created_at=r["created_at"],
+        )
+        for r in rows
+    ]
+
+
+@app.post("/api/v1/sessions/{session_id}/end")
+async def end_session(
+    session_id: str,
+    user_email: str = Depends(get_current_user_email),
+) -> dict[str, str]:
+    session = active_sessions.pop(session_id, None)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    session.status = "ended"
+    await update_session_status(session_id, "ended")
+    await _broadcast_event(session_id, {"type": "session_ended", "session_id": session_id})
+    conns = session_connections.pop(session_id, set())
+    for ws in conns:
+        try:
+            await ws.close()
+        except Exception:
+            pass
+    try:
+        await redis_client.delete(f"session:{session_id}:status")
+    except Exception:
+        pass
+    logger.info("session_ended", extra={"session_id": session_id, "user_email": user_email})
+    return {"status": "ended", "session_id": session_id}
+
+
+@app.get("/api/v1/progress/{learner_id}", response_model=ProgressResponse)
+async def get_progress(
+    learner_id: str,
+    _user_email: str = Depends(get_current_user_email),
+) -> ProgressResponse:
+    progress_data = await get_learner_progress(learner_id)
+    sessions_rows = await get_sessions_by_learner(learner_id)
+    recent = [
+        SessionResponse(
+            session_id=str(r["session_id"]),
+            learner_id=str(r["learner_id"]),
+            lesson_topic=str(r["lesson_topic"]),
+            status=str(r["status"]),
+            created_at=r["created_at"],
+        )
+        for r in sessions_rows[:10]
+    ]
+    return ProgressResponse(
+        learner_id=learner_id,
+        total_sessions=int(progress_data["total_sessions"]),
+        total_turns=int(progress_data["total_turns"]),
+        avg_latency_ms=0,
+        topics_studied=list(progress_data["topics_studied"]),
+        recent_sessions=recent,
+    )
 
 
 @app.post("/api/v1/sessions/{session_id}/turns", response_model=TurnResponse)

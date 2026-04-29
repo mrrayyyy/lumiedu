@@ -15,6 +15,11 @@ class SessionResponse(BaseModel):
     status: str
 
 
+class SessionListResponse(BaseModel):
+    sessions: list[SessionResponse]
+    total: int
+
+
 class TurnRequest(BaseModel):
     text_input: str = Field(default="", max_length=2000)
 
@@ -25,6 +30,21 @@ class TurnResponse(BaseModel):
     assistant_response: str
     audio_url: str
     response_ms: int
+
+
+class TurnHistoryItem(BaseModel):
+    transcript: str
+    assistant_response: str
+    created_at: datetime
+
+
+class ProgressResponse(BaseModel):
+    learner_id: str
+    total_sessions: int
+    total_turns: int
+    avg_latency_ms: int
+    topics_studied: list[str]
+    recent_sessions: list[SessionResponse]
 
 
 class LoginRequest(BaseModel):
