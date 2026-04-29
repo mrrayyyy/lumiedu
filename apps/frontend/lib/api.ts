@@ -103,11 +103,16 @@ export async function submitTurn(
   token: string,
   sessionId: string,
   textInput: string,
+  audioBase64?: string,
 ): Promise<Turn> {
+  const body: Record<string, string> = { text_input: textInput };
+  if (audioBase64) {
+    body.audio_base64 = audioBase64;
+  }
   const res = await fetch(`${API_BASE}/v1/sessions/${sessionId}/turns`, {
     method: "POST",
     headers: authHeaders(token),
-    body: JSON.stringify({ text_input: textInput }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) {
     throw new ApiError("Gui cau hoi that bai", res.status);

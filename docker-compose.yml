@@ -70,6 +70,13 @@ services:
       - "${STT_PORT:-8101}:8101"
     environment:
       STT_PROVIDER_URL: ${STT_PROVIDER_URL:-}
+      WHISPER_MODEL_SIZE: ${WHISPER_MODEL_SIZE:-base}
+      WHISPER_DEVICE: ${WHISPER_DEVICE:-cpu}
+      WHISPER_COMPUTE_TYPE: ${WHISPER_COMPUTE_TYPE:-int8}
+      WHISPER_BEAM_SIZE: ${WHISPER_BEAM_SIZE:-5}
+      WHISPER_VAD_ENABLED: ${WHISPER_VAD_ENABLED:-true}
+    volumes:
+      - lumiedu-whisper-cache:/root/.cache/huggingface
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys;sys.exit(0 if urllib.request.urlopen('http://localhost:8101/health').status==200 else 1)"]
       interval: 10s
@@ -88,6 +95,9 @@ services:
     environment:
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2:3b}
+      OLLAMA_TIMEOUT: ${OLLAMA_TIMEOUT:-30}
+      MAX_HISTORY_TURNS: ${MAX_HISTORY_TURNS:-10}
+      LLM_TEMPERATURE: ${LLM_TEMPERATURE:-0.7}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys;sys.exit(0 if urllib.request.urlopen('http://localhost:8102/health').status==200 else 1)"]
       interval: 10s
@@ -105,6 +115,12 @@ services:
       - "${TTS_PORT:-8103}:8103"
     environment:
       TTS_PROVIDER_URL: ${TTS_PROVIDER_URL:-}
+      TTS_GTTS_ENABLED: ${TTS_GTTS_ENABLED:-true}
+      TTS_GTTS_LANGUAGE: ${TTS_GTTS_LANGUAGE:-vi}
+      TTS_GTTS_SLOW: ${TTS_GTTS_SLOW:-true}
+      TTS_MAX_CACHE_FILES: ${TTS_MAX_CACHE_FILES:-500}
+    volumes:
+      - lumiedu-tts-cache:/app/audio_cache
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys;sys.exit(0 if urllib.request.urlopen('http://localhost:8103/health').status==200 else 1)"]
       interval: 10s
@@ -173,6 +189,6 @@ networks:
 
 volumes:
   lumiedu-postgres-data:
-    name: lumiedu-postgres-data
   lumiedu-redis-data:
-    name: lumiedu-redis-data
+  lumiedu-whisper-cache:
+  lumiedu-tts-cache:

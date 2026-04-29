@@ -5,6 +5,9 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+COPY config/ config/
+COPY schemas/ schemas/
+COPY providers/ providers/
 COPY main.py .
 
 EXPOSE 8102

@@ -122,7 +122,21 @@ async def process_turn(
         raise HTTPException(status_code=404, detail="Session not found")
 
     try:
-        result = await orchestrator.run_turn(payload.text_input)
+        session = session_mgr.get(session_id)
+        lesson_topic = session.lesson_topic if session else ""
+
+        turn_rows = await get_turns_by_session(session_id)
+        history: list[dict[str, str]] = []
+        for row in turn_rows[-10:]:
+            history.append({"role": "learner", "text": str(row["transcript"])})
+            history.append({"role": "tutor", "text": str(row["assistant_response"])})
+
+        result = await orchestrator.run_turn(
+            text_input=payload.text_input,
+            audio_base64=payload.audio_base64,
+            lesson_topic=lesson_topic,
+            history=history,
+        )
         response = TurnResponse(
             session_id=session_id,
             transcript=str(result["transcript"]),

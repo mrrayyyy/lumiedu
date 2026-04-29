@@ -22,6 +22,7 @@ class SessionListResponse(BaseModel):
 
 class TurnRequest(BaseModel):
     text_input: str = Field(default="", max_length=2000)
+    audio_base64: str | None = Field(default=None, description="Base64 encoded audio for STT")
 
 
 class TurnResponse(BaseModel):
