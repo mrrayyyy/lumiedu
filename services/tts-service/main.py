@@ -1,37 +1,62 @@
-import os
+from __future__ import annotations
 
-import httpx
+import logging
+import time
+from pathlib import Path
+
 from fastapi import FastAPI
-from pydantic import BaseModel, Field
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+
+from config import settings
+from providers import ExternalProvider, GTTSProvider
+from schemas import TTSRequest, TTSResponse
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 
 app = FastAPI(title="LumiEdu TTS Service")
 
-
-class TTSRequest(BaseModel):
-    text: str = Field(default="")
-    voice: str = "warm_teacher"
+cache_dir = Path(settings.audio_cache_dir)
+cache_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/audio", StaticFiles(directory=str(cache_dir)), name="audio")
 
 
 @app.get("/health")
 def health() -> dict[str, str]:
-    return {"status": "ok", "service": "tts"}
-
-
-@app.post("/synthesize")
-async def synthesize(payload: TTSRequest) -> dict[str, str]:
-    provider_url = os.getenv("TTS_PROVIDER_URL", "").strip()
-    if provider_url and payload.text.strip():
-        async with httpx.AsyncClient(timeout=20.0) as client:
-            response = await client.post(
-                provider_url,
-                json={"text": payload.text, "voice": payload.voice},
-            )
-            response.raise_for_status()
-            audio_url = str(response.json().get("audio_url", "")).strip()
-            if audio_url:
-                return {"audio_url": audio_url, "text": payload.text}
-
     return {
-        "audio_url": f"/audio/mock/{payload.voice}",
-        "text": payload.text,
+        "status": "ok",
+        "service": "tts",
+        "gtts_available": "yes" if GTTSProvider.is_available() else "no",
+        "external_configured": "yes" if ExternalProvider.is_available() else "no",
     }
+
+
+@app.post("/synthesize", response_model=TTSResponse)
+async def synthesize(payload: TTSRequest) -> TTSResponse:
+    started = time.perf_counter()
+    text = payload.text.strip()
+
+    if not text:
+        return _response("", text, started, "mock")
+
+    if ExternalProvider.is_available():
+        result = await ExternalProvider.synthesize(text, payload.voice)
+        if result:
+            return _response(result, text, started, "external")
+
+    if GTTSProvider.is_available():
+        result = GTTSProvider.synthesize(text, payload.language)
+        if result:
+            return _response(result, text, started, "gtts")
+
+    return _response(f"/audio/mock/{payload.voice}", text, started, "mock")
+
+
+def _response(audio_url: str, text: str, started: float, provider: str) -> TTSResponse:
+    elapsed = int((time.perf_counter() - started) * 1000)
+    return TTSResponse(
+        audio_url=audio_url,
+        text=text,
+        duration_ms=elapsed,
+        provider=provider,
+    )

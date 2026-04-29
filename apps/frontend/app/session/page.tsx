@@ -4,6 +4,7 @@ import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
+import { useVoiceRecorder } from "@/lib/hooks/use-voice-recorder";
 import { endSession, getSession, submitTurn } from "@/lib/api";
 import type { Session, Turn } from "@/lib/types";
 import ChatBubble from "@/components/chat/chat-bubble";
@@ -16,6 +17,7 @@ type ChatMessage = {
   role: "learner" | "tutor";
   text: string;
   latencyMs?: number;
+  audioUrl?: string;
 };
 
 function SessionContent() {
@@ -31,6 +33,7 @@ function SessionContent() {
   const [error, setError] = useState("");
   const [wsStatus, setWsStatus] = useState<"connecting" | "connected" | "disconnected">("disconnected");
   const chatEndRef = useRef<HTMLDivElement>(null);
+  const recorder = useVoiceRecorder();
 
   const scrollToBottom = useCallback(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -81,19 +84,25 @@ function SessionContent() {
 
   useEffect(scrollToBottom, [messages, scrollToBottom]);
 
-  async function handleSend() {
-    const text = inputText.trim();
-    if (!text || !session || isSending) return;
+  async function handleSend(audioBase64?: string) {
+    const text = audioBase64 ? "[Giong noi]" : inputText.trim();
+    if (!text && !audioBase64) return;
+    if (!session || isSending) return;
 
-    setInputText("");
+    if (!audioBase64) setInputText("");
     setIsSending(true);
     setMessages((prev) => [...prev, { role: "learner", text }]);
 
     try {
-      const result: Turn = await submitTurn(token, session.session_id, text);
+      const result: Turn = await submitTurn(token, session.session_id, text, audioBase64);
       setMessages((prev) => [
         ...prev,
-        { role: "tutor", text: result.assistant_response, latencyMs: result.response_ms },
+        {
+          role: "tutor",
+          text: result.assistant_response,
+          latencyMs: result.response_ms,
+          audioUrl: result.audio_url,
+        },
       ]);
     } catch {
       setMessages((prev) => [
@@ -105,8 +114,20 @@ function SessionContent() {
     }
   }
 
+  async function handleTextSubmit() {
+    await handleSend();
+  }
+
+  async function handleVoiceStop() {
+    const base64 = await recorder.stopRecording();
+    if (base64) {
+      await handleSend(base64);
+    }
+  }
+
   async function handleEndSession() {
     if (!session) return;
+    recorder.cancelRecording();
     try {
       await endSession(token, session.session_id);
       router.push("/dashboard");
@@ -149,6 +170,7 @@ function SessionContent() {
               role={msg.role}
               text={msg.text}
               latencyMs={msg.latencyMs}
+              audioUrl={msg.audioUrl}
             />
           ))}
           {isSending && <TypingIndicator />}
@@ -159,8 +181,12 @@ function SessionContent() {
       <ChatInput
         value={inputText}
         onChange={setInputText}
-        onSubmit={handleSend}
+        onSubmit={handleTextSubmit}
+        onVoiceStart={recorder.startRecording}
+        onVoiceStop={handleVoiceStop}
         disabled={isSending}
+        isRecording={recorder.isRecording}
+        isProcessingVoice={recorder.isProcessing}
       />
     </div>
   );

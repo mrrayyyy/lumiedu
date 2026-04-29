@@ -14,6 +14,7 @@ export type SessionListResponse = {
 export type Turn = {
   transcript: string;
   assistant_response: string;
+  audio_url: string;
   response_ms: number;
 };
 
