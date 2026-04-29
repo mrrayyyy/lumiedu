@@ -4,13 +4,17 @@ import { useCallback, useRef, useState } from "react";
 
 type RecorderState = "idle" | "recording" | "processing";
 
-function arrayBufferToBase64(buffer: ArrayBuffer): string {
-  const bytes = new Uint8Array(buffer);
-  let binary = "";
-  for (let i = 0; i < bytes.byteLength; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return btoa(binary);
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const dataUrl = reader.result as string;
+      const base64 = dataUrl.split(",", 2)[1] ?? "";
+      resolve(base64);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
 }
 
 export function useVoiceRecorder() {
@@ -59,8 +63,7 @@ export function useVoiceRecorder() {
         chunksRef.current = [];
 
         try {
-          const buffer = await blob.arrayBuffer();
-          const base64 = arrayBufferToBase64(buffer);
+          const base64 = await blobToBase64(blob);
           setState("idle");
           resolve(base64);
         } catch {

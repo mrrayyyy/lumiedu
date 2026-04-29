@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useRequireAuth } from "@/lib/hooks/use-require-auth";
 import { usePoll } from "@/lib/hooks/use-poll";
@@ -33,7 +33,7 @@ export default function DashboardPage() {
   const [creating, setCreating] = useState(false);
   const [showNewSession, setShowNewSession] = useState(false);
 
-  const loadData = useCallback(async () => {
+  async function loadData() {
     if (!token) return;
     const [sessionData, metricsData] = await Promise.all([
       listSessions(token),
@@ -41,7 +41,7 @@ export default function DashboardPage() {
     ]);
     setSessions(sessionData.sessions);
     setMetrics(metricsData);
-  }, [token]);
+  }
 
   useEffect(() => {
     if (!token) return;
