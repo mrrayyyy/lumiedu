@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 
@@ -100,8 +101,6 @@ class VoiceOrchestrator:
                     exc,
                 )
                 if attempt < _MAX_RETRIES:
-                    import asyncio
-
                     await asyncio.sleep(_RETRY_DELAY * (attempt + 1))
 
         raise last_error or RuntimeError(f"Request to {url} failed")

@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { useRequireAuth } from "@/lib/hooks/use-require-auth";
 import { getProgress } from "@/lib/api";
 import type { ProgressData } from "@/lib/types";
@@ -12,23 +12,6 @@ export default function ProgressPage() {
   const [progress, setProgress] = useState<ProgressData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-
-  const loadProgress = useCallback(
-    async (id: string) => {
-      if (!token || !id.trim()) return;
-      setLoading(true);
-      setError("");
-      try {
-        const data = await getProgress(token, id);
-        setProgress(data);
-      } catch {
-        setError("Khong the tai tien do hoc tap");
-      } finally {
-        setLoading(false);
-      }
-    },
-    [token],
-  );
 
   useEffect(() => {
     if (!token) return;
@@ -46,11 +29,22 @@ export default function ProgressPage() {
       }
     })();
     return () => { cancelled = true; };
-  }, [token, learnerId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
 
-  function handleSearch(e: FormEvent<HTMLFormElement>) {
+  async function handleSearch(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    loadProgress(learnerId);
+    if (!token || !learnerId.trim()) return;
+    setLoading(true);
+    setError("");
+    try {
+      const data = await getProgress(token, learnerId);
+      setProgress(data);
+    } catch {
+      setError("Khong the tai tien do hoc tap");
+    } finally {
+      setLoading(false);
+    }
   }
 
   if (!isAuthenticated) return null;
