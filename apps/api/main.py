@@ -4,7 +4,8 @@ import logging
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect, status
+from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect, status
+from fastapi.middleware.cors import CORSMiddleware
 
 from auth import create_access_token, decode_access_token, get_current_user_email, verify_password
 from config import settings
@@ -28,6 +29,15 @@ orchestrator = VoiceOrchestrator()
 active_sessions: dict[str, SessionResponse] = {}
 session_connections: dict[str, set[WebSocket]] = {}
 metrics = {"turn_total": 0, "turn_error_total": 0, "e2e_latency_ms_last": 0}
+
+allowed_origins = [origin.strip() for origin in settings.cors_allowed_origins.split(",") if origin.strip()]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.on_event("startup")
@@ -65,8 +75,17 @@ async def api_metrics(user_email: str = Depends(get_current_user_email)) -> dict
 
 @app.post("/api/v1/sessions", response_model=SessionResponse)
 async def create_session(
-    payload: SessionCreateRequest, user_email: str = Depends(get_current_user_email)
+    payload: SessionCreateRequest,
+    request: Request,
+    user_email: str = Depends(get_current_user_email),
 ) -> SessionResponse:
+    await _check_rate_limit(
+        key=f"ratelimit:session-create:{user_email}:{request.client.host if request.client else 'unknown'}",
+        limit=settings.session_create_rate_limit,
+        window_seconds=settings.session_create_rate_window_seconds,
+        detail="Too many session creation attempts. Please try again later.",
+    )
+
     if len(active_sessions) >= settings.max_concurrent_sessions:
         raise HTTPException(status_code=429, detail="Max concurrent sessions reached")
 
@@ -172,7 +191,15 @@ async def _broadcast_event(session_id: str, event: dict[str, object]) -> None:
 
 
 @app.post("/api/v1/auth/login", response_model=TokenResponse)
-async def login(payload: LoginRequest) -> TokenResponse:
+async def login(payload: LoginRequest, request: Request) -> TokenResponse:
+    client_host = request.client.host if request.client else "unknown"
+    await _check_rate_limit(
+        key=f"ratelimit:login:{payload.email}:{client_host}",
+        limit=settings.login_rate_limit_attempts,
+        window_seconds=settings.login_rate_limit_window_seconds,
+        detail="Too many login attempts. Please try again later.",
+    )
+
     if settings.auth_disabled:
         return TokenResponse(access_token=create_access_token(settings.bootstrap_admin_email))
 
@@ -186,3 +213,18 @@ async def login(payload: LoginRequest) -> TokenResponse:
 
     token = create_access_token(payload.email)
     return TokenResponse(access_token=token)
+
+
+async def _check_rate_limit(key: str, limit: int, window_seconds: int, detail: str) -> None:
+    if limit <= 0 or window_seconds <= 0:
+        return
+    try:
+        current = await redis_client.incr(key)
+        if current == 1:
+            await redis_client.expire(key, window_seconds)
+        if current > limit:
+            raise HTTPException(status_code=429, detail=detail)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.warning("rate_limit_check_failed", extra={"key": key, "error": str(exc)})
