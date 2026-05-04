@@ -114,6 +114,32 @@ async def update_session_status(session_id: str, new_status: str) -> None:
         )
 
 
+async def get_session_by_id(session_id: str) -> dict[str, object] | None:
+    try:
+        async with engine.connect() as conn:
+            row = (
+                await conn.execute(
+                    text(
+                        "SELECT session_id, learner_id, lesson_topic, status, created_at "
+                        "FROM learning_sessions WHERE session_id = :session_id"
+                    ),
+                    {"session_id": session_id},
+                )
+            ).first()
+            if not row:
+                return None
+            return {
+                "session_id": str(row[0]),
+                "learner_id": str(row[1]),
+                "lesson_topic": str(row[2]),
+                "status": str(row[3]),
+                "created_at": row[4],
+            }
+    except Exception as exc:
+        logger.warning("get_session_by_id_failed", extra={"session_id": session_id, "error": str(exc)})
+        return None
+
+
 async def get_turns_by_session(session_id: str) -> list[dict[str, object]]:
     try:
         async with engine.connect() as conn:
