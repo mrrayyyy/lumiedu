@@ -1,14 +1,17 @@
-import os
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-class Settings:
-    chromadb_persist_dir: str = os.getenv("CHROMADB_PERSIST_DIR", "/app/chromadb_data")
-    embedding_model: str = os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
-    upload_dir: str = os.getenv("UPLOAD_DIR", "/app/uploads")
-    max_chunk_size: int = int(os.getenv("MAX_CHUNK_SIZE", "800"))
-    chunk_overlap: int = int(os.getenv("CHUNK_OVERLAP", "100"))
-    max_file_size_mb: int = int(os.getenv("MAX_FILE_SIZE_MB", "20"))
-    top_k_results: int = int(os.getenv("TOP_K_RESULTS", "5"))
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+
+    chromadb_persist_dir: str = Field(default="/app/chromadb_data", validation_alias="CHROMADB_PERSIST_DIR")
+    embedding_model: str = Field(default="all-MiniLM-L6-v2", validation_alias="EMBEDDING_MODEL")
+    upload_dir: str = Field(default="/app/uploads", validation_alias="UPLOAD_DIR")
+    max_chunk_size: int = Field(default=800, validation_alias="MAX_CHUNK_SIZE")
+    chunk_overlap: int = Field(default=100, validation_alias="CHUNK_OVERLAP")
+    max_file_size_mb: int = Field(default=20, validation_alias="MAX_FILE_SIZE_MB")
+    top_k_results: int = Field(default=5, validation_alias="TOP_K_RESULTS")
 
 
 settings = Settings()
