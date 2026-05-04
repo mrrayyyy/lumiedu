@@ -22,6 +22,7 @@ from repos.knowledge_repo import (
     list_all_documents,
     list_documents_by_teacher,
     unlink_document_from_class,
+    update_document_chunk_count,
 )
 from repos.class_repo import get_class
 from schemas import (
@@ -65,6 +66,10 @@ async def upload_knowledge(
         raise HTTPException(status_code=400, detail="Unsupported file type")
 
     content = await file.read()
+    max_bytes = 20 * 1024 * 1024
+    if len(content) > max_bytes:
+        raise HTTPException(status_code=400, detail="File too large (max 20MB)")
+
     doc_id = await create_document(
         teacher_email=current.email,
         title=title,
@@ -92,16 +97,7 @@ async def upload_knowledge(
         logger.warning("knowledge_service_upload_failed: %s", exc)
         raise HTTPException(status_code=502, detail="Knowledge service upload failed") from exc
 
-    from sqlalchemy import text as sql_text
-    from core.database import engine
-    try:
-        async with engine.begin() as conn:
-            await conn.execute(
-                sql_text("UPDATE knowledge_documents SET chunk_count = :count WHERE doc_id = :doc_id"),
-                {"count": chunk_count, "doc_id": doc_id},
-            )
-    except Exception:
-        pass
+    await update_document_chunk_count(doc_id, chunk_count)
 
     doc = await get_document(doc_id)
     if not doc:
