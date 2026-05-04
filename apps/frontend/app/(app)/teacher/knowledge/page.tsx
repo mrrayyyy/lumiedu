@@ -90,8 +90,9 @@ export default function TeacherKnowledgePage() {
     }
   }
 
-  async function handleDelete(docId: string) {
+  async function handleDelete(docId: string, docTitle: string) {
     if (!token) return;
+    if (!window.confirm(`Ban co chac muon xoa tai lieu "${docTitle}"?`)) return;
     try {
       await deleteKnowledge(token, docId);
       await loadDocs();
@@ -231,7 +232,7 @@ export default function TeacherKnowledgePage() {
               </div>
               <button
                 type="button"
-                onClick={() => handleDelete(doc.doc_id)}
+                onClick={() => handleDelete(doc.doc_id, doc.title)}
                 className="rounded-lg px-3 py-1.5 text-xs text-red-600 hover:bg-red-50"
               >
                 Xoa

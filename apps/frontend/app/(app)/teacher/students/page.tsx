@@ -71,10 +71,16 @@ export default function TeacherStudentsPage() {
                   <td className="px-4 py-3 text-gray-700">{s.grade_level || "-"}</td>
                   <td className="px-4 py-3 text-right">
                     <Link
+                      href={`/teacher/students/${encodeURIComponent(s.email)}/profile`}
+                      className="mr-3 text-xs text-indigo-600 hover:text-indigo-800"
+                    >
+                      Ho so
+                    </Link>
+                    <Link
                       href={`/progress?learner=${encodeURIComponent(s.email)}`}
                       className="text-xs text-indigo-600 hover:text-indigo-800"
                     >
-                      Xem tien do
+                      Tien do
                     </Link>
                   </td>
                 </tr>

@@ -117,8 +117,9 @@ export default function TeacherVoicePage() {
     }
   }
 
-  async function handleDelete(profileId: string) {
+  async function handleDelete(profileId: string, voiceName: string) {
     if (!token) return;
+    if (!window.confirm(`Ban co chac muon xoa voice "${voiceName}"?`)) return;
     try {
       await deleteVoiceProfile(token, profileId);
       await loadProfiles();
@@ -209,7 +210,7 @@ export default function TeacherVoicePage() {
                   </span>
                   <button
                     type="button"
-                    onClick={() => handleDelete(p.profile_id)}
+                    onClick={() => handleDelete(p.profile_id, p.voice_name)}
                     className="rounded-lg px-2 py-1 text-xs text-red-600 hover:bg-red-50"
                   >
                     Xoa

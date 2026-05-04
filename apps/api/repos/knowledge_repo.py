@@ -136,6 +136,21 @@ async def get_document(doc_id: str) -> dict[str, object] | None:
         return None
 
 
+async def update_document_chunk_count(doc_id: str, chunk_count: int) -> bool:
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(
+                text(
+                    "UPDATE knowledge_documents SET chunk_count = :count WHERE doc_id = :doc_id"
+                ),
+                {"count": chunk_count, "doc_id": doc_id},
+            )
+        return True
+    except Exception as exc:
+        logger.warning("update_document_chunk_count_failed: %s", exc)
+        return False
+
+
 async def delete_document(doc_id: str) -> bool:
     try:
         async with engine.begin() as conn:

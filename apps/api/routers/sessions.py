@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect
@@ -269,50 +270,59 @@ async def process_turn(
         lesson_topic = session.lesson_topic if session else ""
         learner_id = session.learner_id if session else ""
 
-        turn_rows = await get_turns_by_session(session_id)
+        # Parallel lookups: history, doc_ids, student profile, memories, voice
+        turns_task = get_turns_by_session(session_id)
+        if learner_id:
+            doc_ids_task = get_doc_ids_for_learner(learner_id)
+            profile_task = get_student_profile(learner_id)
+            memories_task = get_recent_memories(learner_id, limit=3)
+            voice_task = get_voice_for_learner(learner_id)
+            turn_rows, doc_ids, profile, memories, voice_info = await asyncio.gather(
+                turns_task, doc_ids_task, profile_task, memories_task, voice_task,
+            )
+        else:
+            turn_rows = await turns_task
+            doc_ids: list[str] = []
+            profile = None
+            memories: list[dict[str, object]] = []
+            voice_info = None
+
         history: list[dict[str, str]] = []
         for row in turn_rows[-10:]:
             history.append({"role": "learner", "text": str(row["transcript"])})
             history.append({"role": "tutor", "text": str(row["assistant_response"])})
 
-        # Phase 1: RAG - retrieve knowledge chunks
+        # RAG - retrieve knowledge chunks
         context_chunks: list[str] | None = None
-        if learner_id:
-            doc_ids = await get_doc_ids_for_learner(learner_id)
-            if doc_ids:
-                query_text = payload.text_input or lesson_topic
-                try:
-                    async with httpx.AsyncClient(timeout=10.0) as client:
-                        resp = await client.post(
-                            f"{settings.knowledge_url}/query",
-                            json={"query": query_text, "doc_ids": doc_ids, "top_k": 5},
-                        )
-                        if resp.status_code == 200:
-                            chunks_data = resp.json().get("chunks", [])
-                            context_chunks = [c["text"] for c in chunks_data if c.get("score", 0) > 0.3]
-                except Exception:
-                    logger.warning("knowledge_query_failed", extra={"session_id": session_id})
+        if doc_ids:
+            query_text = payload.text_input or lesson_topic
+            try:
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    resp = await client.post(
+                        f"{settings.knowledge_url}/query",
+                        json={"query": query_text, "doc_ids": doc_ids, "top_k": 5},
+                    )
+                    if resp.status_code == 200:
+                        chunks_data = resp.json().get("chunks", [])
+                        context_chunks = [c["text"] for c in chunks_data if c.get("score", 0) > 0.3]
+            except Exception:
+                logger.warning("knowledge_query_failed", extra={"session_id": session_id})
 
-        # Phase 2: Student memory context
+        # Student memory context
         student_context: dict[str, object] | None = None
-        if learner_id:
-            profile = await get_student_profile(learner_id)
-            memories = await get_recent_memories(learner_id, limit=3)
-            if profile or memories:
-                student_context = {
-                    "learning_style": str(profile["learning_style"]) if profile else "balanced",
-                    "difficulty_level": str(profile["difficulty_level"]) if profile else "medium",
-                    "strengths": str(profile["strengths"]) if profile else "[]",
-                    "weaknesses": str(profile["weaknesses"]) if profile else "[]",
-                    "recent_summaries": [str(m["summary"]) for m in memories],
-                }
+        if profile or memories:
+            student_context = {
+                "learning_style": str(profile["learning_style"]) if profile else "balanced",
+                "difficulty_level": str(profile["difficulty_level"]) if profile else "medium",
+                "strengths": str(profile["strengths"]) if profile else "[]",
+                "weaknesses": str(profile["weaknesses"]) if profile else "[]",
+                "recent_summaries": [str(m["summary"]) for m in memories],
+            }
 
-        # Phase 3: Voice profile lookup
+        # Voice profile
         voice_id: str | None = None
-        if learner_id:
-            voice_info = await get_voice_for_learner(learner_id)
-            if voice_info and voice_info.get("external_voice_id"):
-                voice_id = str(voice_info["external_voice_id"])
+        if voice_info and voice_info.get("external_voice_id"):
+            voice_id = str(voice_info["external_voice_id"])
 
         result = await orchestrator.run_turn(
             text_input=payload.text_input,
