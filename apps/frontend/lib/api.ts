@@ -1,4 +1,9 @@
 import type {
+  Assignment,
+  AssignmentCreateInput,
+  ClassCreateInput,
+  ClassDetail,
+  ClassSummary,
   Metrics,
   ProgressData,
   Session,
@@ -6,6 +11,10 @@ import type {
   TokenResponse,
   Turn,
   TurnHistoryItem,
+  UserCreateInput,
+  UserListResponse,
+  UserSummary,
+  UserUpdateInput,
 } from "./types";
 
 const API_BASE = "/api";
@@ -25,6 +34,14 @@ function authHeaders(token: string): Record<string, string> {
   };
 }
 
+async function parseError(res: Response, fallback: string): Promise<ApiError> {
+  const data = await res.json().catch(() => ({}));
+  return new ApiError(
+    (data as Record<string, string>).detail || fallback,
+    res.status,
+  );
+}
+
 export async function login(email: string, password: string): Promise<TokenResponse> {
   const res = await fetch(`${API_BASE}/v1/auth/login`, {
     method: "POST",
@@ -32,13 +49,19 @@ export async function login(email: string, password: string): Promise<TokenRespo
     body: JSON.stringify({ email, password }),
   });
   if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    throw new ApiError(
-      (data as Record<string, string>).detail || "Dang nhap that bai",
-      res.status,
-    );
+    throw await parseError(res, "Dang nhap that bai");
   }
   return (await res.json()) as TokenResponse;
+}
+
+export async function getMe(token: string): Promise<UserSummary> {
+  const res = await fetch(`${API_BASE}/v1/auth/me`, {
+    headers: authHeaders(token),
+  });
+  if (!res.ok) {
+    throw await parseError(res, "Khong the lay thong tin tai khoan");
+  }
+  return (await res.json()) as UserSummary;
 }
 
 export async function createSession(
@@ -52,11 +75,7 @@ export async function createSession(
     body: JSON.stringify({ learner_id: learnerId, lesson_topic: lessonTopic }),
   });
   if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    throw new ApiError(
-      (data as Record<string, string>).detail || "Khong the tao phien hoc",
-      res.status,
-    );
+    throw await parseError(res, "Khong the tao phien hoc");
   }
   return (await res.json()) as Session;
 }
@@ -80,7 +99,7 @@ export async function getSession(token: string, sessionId: string): Promise<Sess
     headers: authHeaders(token),
   });
   if (!res.ok) {
-    throw new ApiError("Phien hoc khong ton tai", res.status);
+    throw await parseError(res, "Phien hoc khong ton tai");
   }
   return (await res.json()) as Session;
 }
@@ -94,7 +113,7 @@ export async function endSession(
     headers: authHeaders(token),
   });
   if (!res.ok) {
-    throw new ApiError("Khong the ket thuc phien hoc", res.status);
+    throw await parseError(res, "Khong the ket thuc phien hoc");
   }
   return (await res.json()) as { status: string };
 }
@@ -115,7 +134,7 @@ export async function submitTurn(
     body: JSON.stringify(body),
   });
   if (!res.ok) {
-    throw new ApiError("Gui cau hoi that bai", res.status);
+    throw await parseError(res, "Gui cau hoi that bai");
   }
   return (await res.json()) as Turn;
 }
@@ -141,7 +160,7 @@ export async function getProgress(
     headers: authHeaders(token),
   });
   if (!res.ok) {
-    throw new ApiError("Khong the tai tien do", res.status);
+    throw await parseError(res, "Khong the tai tien do");
   }
   return (await res.json()) as ProgressData;
 }
@@ -154,6 +173,202 @@ export async function getMetrics(token: string): Promise<Metrics> {
     return { turn_total: 0, turn_error_total: 0, e2e_latency_ms_last: 0 };
   }
   return (await res.json()) as Metrics;
+}
+
+export async function listUsers(
+  token: string,
+  role?: string,
+): Promise<UserListResponse> {
+  const params = role ? `?role=${encodeURIComponent(role)}` : "";
+  const res = await fetch(`${API_BASE}/v1/users${params}`, {
+    headers: authHeaders(token),
+  });
+  if (!res.ok) {
+    throw await parseError(res, "Khong the tai danh sach nguoi dung");
+  }
+  return (await res.json()) as UserListResponse;
+}
+
+export async function createUser(
+  token: string,
+  input: UserCreateInput,
+): Promise<UserSummary> {
+  const res = await fetch(`${API_BASE}/v1/users`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    throw await parseError(res, "Khong the tao nguoi dung");
+  }
+  return (await res.json()) as UserSummary;
+}
+
+export async function updateUser(
+  token: string,
+  email: string,
+  input: UserUpdateInput,
+): Promise<UserSummary> {
+  const res = await fetch(`${API_BASE}/v1/users/${encodeURIComponent(email)}`, {
+    method: "PATCH",
+    headers: authHeaders(token),
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    throw await parseError(res, "Khong the cap nhat nguoi dung");
+  }
+  return (await res.json()) as UserSummary;
+}
+
+export async function deleteUser(token: string, email: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/v1/users/${encodeURIComponent(email)}`, {
+    method: "DELETE",
+    headers: authHeaders(token),
+  });
+  if (!res.ok) {
+    throw await parseError(res, "Khong the xoa nguoi dung");
+  }
+}
+
+export async function listClasses(token: string): Promise<ClassSummary[]> {
+  const res = await fetch(`${API_BASE}/v1/classes`, {
+    headers: authHeaders(token),
+  });
+  if (!res.ok) {
+    throw await parseError(res, "Khong the tai danh sach lop");
+  }
+  return (await res.json()) as ClassSummary[];
+}
+
+export async function createClass(
+  token: string,
+  input: ClassCreateInput,
+): Promise<ClassSummary> {
+  const res = await fetch(`${API_BASE}/v1/classes`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    throw await parseError(res, "Khong the tao lop hoc");
+  }
+  return (await res.json()) as ClassSummary;
+}
+
+export async function getClassDetail(token: string, classId: string): Promise<ClassDetail> {
+  const res = await fetch(`${API_BASE}/v1/classes/${classId}`, {
+    headers: authHeaders(token),
+  });
+  if (!res.ok) {
+    throw await parseError(res, "Khong the tai chi tiet lop");
+  }
+  return (await res.json()) as ClassDetail;
+}
+
+export async function addClassMember(
+  token: string,
+  classId: string,
+  studentEmail: string,
+): Promise<UserSummary[]> {
+  const res = await fetch(`${API_BASE}/v1/classes/${classId}/members`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({ student_email: studentEmail }),
+  });
+  if (!res.ok) {
+    throw await parseError(res, "Khong the them thanh vien");
+  }
+  return (await res.json()) as UserSummary[];
+}
+
+export async function removeClassMember(
+  token: string,
+  classId: string,
+  studentEmail: string,
+): Promise<void> {
+  const res = await fetch(
+    `${API_BASE}/v1/classes/${classId}/members/${encodeURIComponent(studentEmail)}`,
+    { method: "DELETE", headers: authHeaders(token) },
+  );
+  if (!res.ok) {
+    throw await parseError(res, "Khong the xoa thanh vien");
+  }
+}
+
+export async function createClassAssignment(
+  token: string,
+  classId: string,
+  input: AssignmentCreateInput,
+): Promise<Assignment> {
+  const res = await fetch(`${API_BASE}/v1/classes/${classId}/assignments`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    throw await parseError(res, "Khong the giao bai");
+  }
+  return (await res.json()) as Assignment;
+}
+
+export async function deleteClassAssignment(
+  token: string,
+  classId: string,
+  assignmentId: string,
+): Promise<void> {
+  const res = await fetch(
+    `${API_BASE}/v1/classes/${classId}/assignments/${assignmentId}`,
+    { method: "DELETE", headers: authHeaders(token) },
+  );
+  if (!res.ok) {
+    throw await parseError(res, "Khong the xoa bai giao");
+  }
+}
+
+export async function listTeacherStudents(token: string): Promise<UserSummary[]> {
+  const res = await fetch(`${API_BASE}/v1/classes/teacher/students`, {
+    headers: authHeaders(token),
+  });
+  if (!res.ok) {
+    throw await parseError(res, "Khong the tai danh sach hoc sinh");
+  }
+  return (await res.json()) as UserSummary[];
+}
+
+export async function listMyAssignments(token: string): Promise<Assignment[]> {
+  const res = await fetch(`${API_BASE}/v1/assignments/me`, {
+    headers: authHeaders(token),
+  });
+  if (!res.ok) {
+    throw await parseError(res, "Khong the tai bai duoc giao");
+  }
+  return (await res.json()) as Assignment[];
+}
+
+export async function listMyChildren(token: string): Promise<UserSummary[]> {
+  const res = await fetch(`${API_BASE}/v1/parents/me/children`, {
+    headers: authHeaders(token),
+  });
+  if (!res.ok) {
+    throw await parseError(res, "Khong the tai danh sach con");
+  }
+  return (await res.json()) as UserSummary[];
+}
+
+export async function linkParentChild(
+  token: string,
+  parentEmail: string,
+  childEmail: string,
+): Promise<UserSummary[]> {
+  const res = await fetch(`${API_BASE}/v1/parents/links`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({ parent_email: parentEmail, child_email: childEmail }),
+  });
+  if (!res.ok) {
+    throw await parseError(res, "Khong the lien ket phu huynh");
+  }
+  return (await res.json()) as UserSummary[];
 }
 
 export { ApiError };

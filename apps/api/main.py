@@ -9,7 +9,16 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from config import settings
 from core.database import close_connections, ensure_db_ready
-from routers import auth_router, health, progress, sessions
+from routers import (
+    assignments_router,
+    auth_router,
+    classes_router,
+    health,
+    parents_router,
+    progress,
+    sessions,
+    users_router,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger("lumiedu-api")
@@ -39,6 +48,10 @@ def create_app() -> FastAPI:
 
     application.include_router(health.router)
     application.include_router(auth_router.router)
+    application.include_router(users_router.router)
+    application.include_router(classes_router.router)
+    application.include_router(assignments_router.router)
+    application.include_router(parents_router.router)
     application.include_router(sessions.router)
     application.include_router(progress.router)
 

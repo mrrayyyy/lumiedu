@@ -5,6 +5,13 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { login as apiLogin } from "@/lib/api";
 
+const DEMO_ACCOUNTS: { label: string; email: string; password: string }[] = [
+  { label: "Quan tri vien", email: "admin@lumiedu.local", password: "Admin123!" },
+  { label: "Giao vien", email: "teacher@lumiedu.local", password: "Demo123!" },
+  { label: "Hoc sinh", email: "student@lumiedu.local", password: "Demo123!" },
+  { label: "Phu huynh", email: "parent@lumiedu.local", password: "Demo123!" },
+];
+
 export default function LoginPage() {
   const router = useRouter();
   const { login } = useAuth();
@@ -19,13 +26,18 @@ export default function LoginPage() {
     setLoading(true);
     try {
       const data = await apiLogin(email, password);
-      login(data.access_token, email);
+      login(data.access_token, data.email, data.role, data.full_name);
       router.push("/dashboard");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Dang nhap that bai");
     } finally {
       setLoading(false);
     }
+  }
+
+  function fillDemo(demoEmail: string, demoPassword: string) {
+    setEmail(demoEmail);
+    setPassword(demoPassword);
   }
 
   return (
@@ -87,6 +99,24 @@ export default function LoginPage() {
               {loading ? "Dang xu ly..." : "Dang nhap"}
             </button>
           </form>
+
+          <div className="mt-6 border-t border-gray-100 pt-4">
+            <p className="mb-2 text-xs font-medium text-gray-500">
+              Dang nhap nhanh tai khoan demo:
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {DEMO_ACCOUNTS.map((d) => (
+                <button
+                  key={d.email}
+                  type="button"
+                  onClick={() => fillDemo(d.email, d.password)}
+                  className="rounded-full border border-gray-300 bg-white px-3 py-1 text-xs text-gray-700 hover:border-indigo-400 hover:bg-indigo-50"
+                >
+                  {d.label}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
 
         <p className="mt-6 text-center text-xs text-gray-500">
