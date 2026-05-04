@@ -175,7 +175,7 @@ class StudentProfileResponse(BaseModel):
     strengths: str
     weaknesses: str
     notes: str
-    updated_at: datetime
+    updated_at: datetime | None = None
 
 
 class StudentProfileUpdateRequest(BaseModel):
