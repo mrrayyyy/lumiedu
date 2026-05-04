@@ -6,3 +6,4 @@ asyncpg
 redis
 pydantic-settings
 python-jose[cryptography]
+python-multipart

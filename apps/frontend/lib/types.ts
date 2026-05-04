@@ -114,3 +114,66 @@ export type AssignmentCreateInput = {
   description: string;
   due_at?: string | null;
 };
+
+// --- Knowledge Base Types ---
+
+export type KnowledgeDocument = {
+  doc_id: string;
+  teacher_email: string;
+  title: string;
+  subject: string;
+  grade_level: string;
+  file_type: string;
+  original_filename: string;
+  chunk_count: number;
+  created_at: string;
+};
+
+// --- Student Memory Types ---
+
+export type StudentProfile = {
+  student_email: string;
+  learning_style: string;
+  difficulty_level: string;
+  preferred_language: string;
+  strengths: string;
+  weaknesses: string;
+  notes: string;
+  updated_at: string | null;
+};
+
+export type LearningMemory = {
+  memory_id: number;
+  student_email: string;
+  session_id: string;
+  summary: string;
+  topics_covered: string;
+  mistakes_made: string;
+  mastery_score: number;
+  created_at: string;
+};
+
+export type SkillAssessment = {
+  id: number;
+  student_email: string;
+  topic: string;
+  sub_skill: string;
+  correct_count: number;
+  total_attempts: number;
+  mastery_rate: number;
+  last_assessed_at: string;
+};
+
+// --- Voice Profile Types ---
+
+export type VoiceProfile = {
+  profile_id: string;
+  teacher_email: string;
+  voice_name: string;
+  provider: string;
+  model_path: string | null;
+  external_voice_id: string | null;
+  sample_count: number;
+  status: string;
+  created_at: string;
+};

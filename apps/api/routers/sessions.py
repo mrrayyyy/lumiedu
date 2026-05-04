@@ -4,6 +4,8 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect
 
+import httpx
+
 from auth import (
     CurrentUser,
     ROLE_ADMIN,
@@ -18,6 +20,8 @@ from core.database import redis_client
 from core.rate_limit import check_rate_limit
 from core.session_manager import SessionManager
 from repos.class_repo import teacher_can_access_student
+from repos.knowledge_repo import get_doc_ids_for_learner
+from repos.memory_repo import get_recent_memories, get_student_profile, save_learning_memory
 from repos.parent_repo import is_parent_of
 from repos.session_repo import (
     get_all_sessions,
@@ -26,6 +30,7 @@ from repos.session_repo import (
     get_turns_by_session,
     save_turn,
 )
+from repos.voice_repo import get_voice_for_learner
 from routers.health import metrics
 from schemas import (
     SessionCreateRequest,
@@ -197,9 +202,45 @@ async def end_session(
     session_id: str,
     current: CurrentUser = Depends(get_current_user),
 ) -> dict[str, str]:
-    await _ensure_session_access(session_id, current)
+    session_resp = await _ensure_session_access(session_id, current)
     if current.role == ROLE_PARENT:
         raise HTTPException(status_code=403, detail="Parents cannot end a session")
+
+    # Generate session summary for student memory
+    learner_id = session_resp.learner_id
+    lesson_topic = session_resp.lesson_topic
+    try:
+        turn_rows = await get_turns_by_session(session_id)
+        if turn_rows:
+            turns_for_summary = []
+            for row in turn_rows:
+                turns_for_summary.append({"role": "learner", "text": str(row["transcript"])})
+                turns_for_summary.append({"role": "tutor", "text": str(row["assistant_response"])})
+
+            try:
+                async with httpx.AsyncClient(timeout=30.0) as client:
+                    resp = await client.post(
+                        f"{settings.llm_url}/summarize",
+                        json={
+                            "session_turns": turns_for_summary,
+                            "lesson_topic": lesson_topic,
+                        },
+                    )
+                    if resp.status_code == 200:
+                        summary_data = resp.json()
+                        await save_learning_memory(
+                            student_email=learner_id,
+                            session_id=session_id,
+                            summary=summary_data.get("summary", ""),
+                            topics_covered=summary_data.get("topics_covered", ""),
+                            mistakes_made=summary_data.get("mistakes_made", ""),
+                            mastery_score=float(summary_data.get("mastery_score", 0)),
+                        )
+            except Exception:
+                logger.warning("session_summary_failed", extra={"session_id": session_id})
+    except Exception:
+        logger.warning("summary_turn_fetch_failed", extra={"session_id": session_id})
+
     try:
         await session_mgr.end(session_id)
     except KeyError:
@@ -226,6 +267,7 @@ async def process_turn(
     try:
         session = session_mgr.get(session_id)
         lesson_topic = session.lesson_topic if session else ""
+        learner_id = session.learner_id if session else ""
 
         turn_rows = await get_turns_by_session(session_id)
         history: list[dict[str, str]] = []
@@ -233,11 +275,53 @@ async def process_turn(
             history.append({"role": "learner", "text": str(row["transcript"])})
             history.append({"role": "tutor", "text": str(row["assistant_response"])})
 
+        # Phase 1: RAG - retrieve knowledge chunks
+        context_chunks: list[str] | None = None
+        if learner_id:
+            doc_ids = await get_doc_ids_for_learner(learner_id)
+            if doc_ids:
+                query_text = payload.text_input or lesson_topic
+                try:
+                    async with httpx.AsyncClient(timeout=10.0) as client:
+                        resp = await client.post(
+                            f"{settings.knowledge_url}/query",
+                            json={"query": query_text, "doc_ids": doc_ids, "top_k": 5},
+                        )
+                        if resp.status_code == 200:
+                            chunks_data = resp.json().get("chunks", [])
+                            context_chunks = [c["text"] for c in chunks_data if c.get("score", 0) > 0.3]
+                except Exception:
+                    logger.warning("knowledge_query_failed", extra={"session_id": session_id})
+
+        # Phase 2: Student memory context
+        student_context: dict[str, object] | None = None
+        if learner_id:
+            profile = await get_student_profile(learner_id)
+            memories = await get_recent_memories(learner_id, limit=3)
+            if profile or memories:
+                student_context = {
+                    "learning_style": str(profile["learning_style"]) if profile else "balanced",
+                    "difficulty_level": str(profile["difficulty_level"]) if profile else "medium",
+                    "strengths": str(profile["strengths"]) if profile else "[]",
+                    "weaknesses": str(profile["weaknesses"]) if profile else "[]",
+                    "recent_summaries": [str(m["summary"]) for m in memories],
+                }
+
+        # Phase 3: Voice profile lookup
+        voice_id: str | None = None
+        if learner_id:
+            voice_info = await get_voice_for_learner(learner_id)
+            if voice_info and voice_info.get("external_voice_id"):
+                voice_id = str(voice_info["external_voice_id"])
+
         result = await orchestrator.run_turn(
             text_input=payload.text_input,
             audio_base64=payload.audio_base64,
             lesson_topic=lesson_topic,
             history=history,
+            context_chunks=context_chunks,
+            student_context=student_context,
+            voice_id=voice_id,
         )
         response = TurnResponse(
             session_id=session_id,

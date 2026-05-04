@@ -8,6 +8,7 @@ import {
   ChartIcon,
   HomeIcon,
   LogoutIcon,
+  MicrophoneIcon,
 } from "@/components/icons";
 import type { Role } from "@/lib/types";
 import type { ReactNode } from "react";
@@ -61,6 +62,24 @@ const NAV_ITEMS: NavItem[] = [
     label: "Cac con",
     icon: <HomeIcon />,
     roles: ["parent"],
+  },
+  {
+    href: "/teacher/knowledge",
+    label: "Ngan kien thuc",
+    icon: <BookIcon className="h-5 w-5" strokeWidth={2} />,
+    roles: ["teacher"],
+  },
+  {
+    href: "/teacher/voice",
+    label: "Voice Studio",
+    icon: <MicrophoneIcon />,
+    roles: ["teacher"],
+  },
+  {
+    href: "/student/profile",
+    label: "Ho so hoc tap",
+    icon: <ChartIcon />,
+    roles: ["student"],
   },
   {
     href: "/progress",

@@ -4,10 +4,14 @@ import type {
   ClassCreateInput,
   ClassDetail,
   ClassSummary,
+  KnowledgeDocument,
+  LearningMemory,
   Metrics,
   ProgressData,
   Session,
   SessionListResponse,
+  SkillAssessment,
+  StudentProfile,
   TokenResponse,
   Turn,
   TurnHistoryItem,
@@ -15,6 +19,7 @@ import type {
   UserListResponse,
   UserSummary,
   UserUpdateInput,
+  VoiceProfile,
 } from "./types";
 
 const API_BASE = "/api";
@@ -369,6 +374,224 @@ export async function linkParentChild(
     throw await parseError(res, "Khong the lien ket phu huynh");
   }
   return (await res.json()) as UserSummary[];
+}
+
+// --- Knowledge Base APIs ---
+
+export async function uploadKnowledge(
+  token: string,
+  file: File,
+  title: string,
+  subject: string = "math",
+  gradeLevel: string = "grade6",
+): Promise<KnowledgeDocument> {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("title", title);
+  formData.append("subject", subject);
+  formData.append("grade_level", gradeLevel);
+  const res = await fetch(`${API_BASE}/v1/knowledge/upload`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData,
+  });
+  if (!res.ok) {
+    throw await parseError(res, "Khong the tai len tai lieu");
+  }
+  return (await res.json()) as KnowledgeDocument;
+}
+
+export async function listKnowledge(token: string): Promise<KnowledgeDocument[]> {
+  const res = await fetch(`${API_BASE}/v1/knowledge`, {
+    headers: authHeaders(token),
+  });
+  if (!res.ok) {
+    throw await parseError(res, "Khong the tai danh sach tai lieu");
+  }
+  return (await res.json()) as KnowledgeDocument[];
+}
+
+export async function deleteKnowledge(token: string, docId: string): Promise<void> {
+  const res = await fetch(`${API_BASE}/v1/knowledge/${docId}`, {
+    method: "DELETE",
+    headers: authHeaders(token),
+  });
+  if (!res.ok) {
+    throw await parseError(res, "Khong the xoa tai lieu");
+  }
+}
+
+export async function linkKnowledgeToClass(
+  token: string,
+  classId: string,
+  docId: string,
+): Promise<void> {
+  const res = await fetch(`${API_BASE}/v1/knowledge/classes/${classId}/link`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({ doc_id: docId }),
+  });
+  if (!res.ok) {
+    throw await parseError(res, "Khong the lien ket tai lieu voi lop");
+  }
+}
+
+export async function listClassKnowledge(
+  token: string,
+  classId: string,
+): Promise<KnowledgeDocument[]> {
+  const res = await fetch(`${API_BASE}/v1/knowledge/classes/${classId}/docs`, {
+    headers: authHeaders(token),
+  });
+  if (!res.ok) {
+    return [];
+  }
+  return (await res.json()) as KnowledgeDocument[];
+}
+
+// --- Student Memory APIs ---
+
+export async function getStudentProfile(
+  token: string,
+  studentEmail: string,
+): Promise<StudentProfile> {
+  const res = await fetch(`${API_BASE}/v1/memory/profile/${encodeURIComponent(studentEmail)}`, {
+    headers: authHeaders(token),
+  });
+  if (!res.ok) {
+    throw await parseError(res, "Khong the tai ho so hoc sinh");
+  }
+  return (await res.json()) as StudentProfile;
+}
+
+export async function updateStudentProfile(
+  token: string,
+  studentEmail: string,
+  input: Partial<StudentProfile>,
+): Promise<StudentProfile> {
+  const res = await fetch(`${API_BASE}/v1/memory/profile/${encodeURIComponent(studentEmail)}`, {
+    method: "PUT",
+    headers: authHeaders(token),
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    throw await parseError(res, "Khong the cap nhat ho so hoc sinh");
+  }
+  return (await res.json()) as StudentProfile;
+}
+
+export async function listLearningMemories(
+  token: string,
+  studentEmail: string,
+): Promise<LearningMemory[]> {
+  const res = await fetch(`${API_BASE}/v1/memory/memories/${encodeURIComponent(studentEmail)}`, {
+    headers: authHeaders(token),
+  });
+  if (!res.ok) {
+    return [];
+  }
+  return (await res.json()) as LearningMemory[];
+}
+
+export async function listSkillAssessments(
+  token: string,
+  studentEmail: string,
+): Promise<SkillAssessment[]> {
+  const res = await fetch(`${API_BASE}/v1/memory/skills/${encodeURIComponent(studentEmail)}`, {
+    headers: authHeaders(token),
+  });
+  if (!res.ok) {
+    return [];
+  }
+  return (await res.json()) as SkillAssessment[];
+}
+
+// --- Voice Profile APIs ---
+
+export async function createVoiceProfile(
+  token: string,
+  voiceName: string,
+  provider: string = "gtts",
+): Promise<VoiceProfile> {
+  const res = await fetch(`${API_BASE}/v1/voice/profiles`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({ voice_name: voiceName, provider }),
+  });
+  if (!res.ok) {
+    throw await parseError(res, "Khong the tao voice profile");
+  }
+  return (await res.json()) as VoiceProfile;
+}
+
+export async function listVoiceProfiles(token: string): Promise<VoiceProfile[]> {
+  const res = await fetch(`${API_BASE}/v1/voice/profiles`, {
+    headers: authHeaders(token),
+  });
+  if (!res.ok) {
+    throw await parseError(res, "Khong the tai danh sach voice");
+  }
+  return (await res.json()) as VoiceProfile[];
+}
+
+export async function uploadVoiceSample(
+  token: string,
+  profileId: string,
+  file: File,
+): Promise<{ status: string; sample_count: string }> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const res = await fetch(`${API_BASE}/v1/voice/profiles/${profileId}/upload-sample`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: formData,
+  });
+  if (!res.ok) {
+    throw await parseError(res, "Khong the tai len mau giong noi");
+  }
+  return (await res.json()) as { status: string; sample_count: string };
+}
+
+export async function trainVoiceProfile(
+  token: string,
+  profileId: string,
+): Promise<{ status: string }> {
+  const res = await fetch(`${API_BASE}/v1/voice/profiles/${profileId}/train`, {
+    method: "POST",
+    headers: authHeaders(token),
+  });
+  if (!res.ok) {
+    throw await parseError(res, "Khong the training voice");
+  }
+  return (await res.json()) as { status: string };
+}
+
+export async function deleteVoiceProfile(
+  token: string,
+  profileId: string,
+): Promise<void> {
+  const res = await fetch(`${API_BASE}/v1/voice/profiles/${profileId}`, {
+    method: "DELETE",
+    headers: authHeaders(token),
+  });
+  if (!res.ok) {
+    throw await parseError(res, "Khong the xoa voice profile");
+  }
+}
+
+export async function assignVoiceToClass(
+  token: string,
+  classId: string,
+  voiceProfileId: string,
+): Promise<void> {
+  const res = await fetch(`${API_BASE}/v1/voice/classes/${classId}/voice`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({ voice_profile_id: voiceProfileId }),
+  });
+  if (!res.ok) {
+    throw await parseError(res, "Khong the gan voice cho lop");
+  }
 }
 
 export { ApiError };

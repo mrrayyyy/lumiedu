@@ -87,6 +87,85 @@ _SCHEMA_SQL = [
         PRIMARY KEY (parent_email, child_email)
     );
     """,
+    # --- Phase 1: Knowledge Base ---
+    """
+    CREATE TABLE IF NOT EXISTS knowledge_documents (
+        doc_id TEXT PRIMARY KEY,
+        teacher_email TEXT NOT NULL REFERENCES auth_users(email) ON DELETE CASCADE,
+        title TEXT NOT NULL,
+        subject TEXT NOT NULL DEFAULT 'math',
+        grade_level TEXT NOT NULL DEFAULT 'grade6',
+        file_type TEXT NOT NULL DEFAULT 'txt',
+        original_filename TEXT NOT NULL DEFAULT '',
+        chunk_count INT NOT NULL DEFAULT 0,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS class_knowledge (
+        class_id TEXT NOT NULL REFERENCES classes(class_id) ON DELETE CASCADE,
+        doc_id TEXT NOT NULL REFERENCES knowledge_documents(doc_id) ON DELETE CASCADE,
+        PRIMARY KEY (class_id, doc_id)
+    );
+    """,
+    # --- Phase 2: Student Memory ---
+    """
+    CREATE TABLE IF NOT EXISTS student_profiles (
+        student_email TEXT PRIMARY KEY REFERENCES auth_users(email) ON DELETE CASCADE,
+        learning_style TEXT NOT NULL DEFAULT 'balanced',
+        difficulty_level TEXT NOT NULL DEFAULT 'medium',
+        preferred_language TEXT NOT NULL DEFAULT 'vi',
+        strengths TEXT NOT NULL DEFAULT '[]',
+        weaknesses TEXT NOT NULL DEFAULT '[]',
+        notes TEXT NOT NULL DEFAULT '',
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+    );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS learning_memories (
+        memory_id BIGSERIAL PRIMARY KEY,
+        student_email TEXT NOT NULL REFERENCES auth_users(email) ON DELETE CASCADE,
+        session_id TEXT REFERENCES learning_sessions(session_id) ON DELETE SET NULL,
+        summary TEXT NOT NULL,
+        topics_covered TEXT NOT NULL DEFAULT '',
+        mistakes_made TEXT NOT NULL DEFAULT '',
+        mastery_score FLOAT NOT NULL DEFAULT 0,
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS skill_assessments (
+        id BIGSERIAL PRIMARY KEY,
+        student_email TEXT NOT NULL REFERENCES auth_users(email) ON DELETE CASCADE,
+        topic TEXT NOT NULL,
+        sub_skill TEXT NOT NULL,
+        correct_count INT NOT NULL DEFAULT 0,
+        total_attempts INT NOT NULL DEFAULT 0,
+        last_assessed_at TIMESTAMP NOT NULL DEFAULT NOW(),
+        UNIQUE (student_email, topic, sub_skill)
+    );
+    """,
+    # --- Phase 3: Voice Cloning ---
+    """
+    CREATE TABLE IF NOT EXISTS teacher_voice_profiles (
+        profile_id TEXT PRIMARY KEY,
+        teacher_email TEXT NOT NULL REFERENCES auth_users(email) ON DELETE CASCADE,
+        voice_name TEXT NOT NULL,
+        provider TEXT NOT NULL DEFAULT 'gtts',
+        model_path TEXT,
+        external_voice_id TEXT,
+        sample_count INT NOT NULL DEFAULT 0,
+        status TEXT NOT NULL DEFAULT 'pending',
+        created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    );
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS class_voice_settings (
+        class_id TEXT PRIMARY KEY REFERENCES classes(class_id) ON DELETE CASCADE,
+        voice_profile_id TEXT NOT NULL REFERENCES teacher_voice_profiles(profile_id) ON DELETE CASCADE,
+        enabled BOOLEAN NOT NULL DEFAULT TRUE
+    );
+    """,
 ]
 
 

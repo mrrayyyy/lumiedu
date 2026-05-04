@@ -27,12 +27,19 @@ class VoiceOrchestrator:
         audio_base64: str | None = None,
         lesson_topic: str = "",
         history: list[dict[str, str]] | None = None,
+        context_chunks: list[str] | None = None,
+        student_context: dict[str, object] | None = None,
+        voice_id: str | None = None,
     ) -> dict[str, str | int]:
         started_at = time.perf_counter()
 
         transcript = await self._stt(text_input, audio_base64)
-        assistant_response = await self._llm(transcript, lesson_topic, history or [])
-        audio_url = await self._tts(assistant_response)
+        assistant_response = await self._llm(
+            transcript, lesson_topic, history or [],
+            context_chunks=context_chunks,
+            student_context=student_context,
+        )
+        audio_url = await self._tts(assistant_response, voice_id=voice_id)
 
         elapsed_ms = int((time.perf_counter() - started_at) * 1000)
         return {
@@ -60,6 +67,8 @@ class VoiceOrchestrator:
         transcript: str,
         lesson_topic: str,
         history: list[dict[str, str]],
+        context_chunks: list[str] | None = None,
+        student_context: dict[str, object] | None = None,
     ) -> str:
         payload: dict[str, object] = {
             "transcript": transcript,
@@ -67,14 +76,18 @@ class VoiceOrchestrator:
             "lesson_topic": lesson_topic,
             "history": history,
         }
+        if context_chunks:
+            payload["context_chunks"] = context_chunks
+        if student_context:
+            payload["student_context"] = student_context
         data = await self._request_with_retry(
             f"{settings.llm_url}/respond",
             payload,
         )
         return str(data.get("assistant_response", ""))
 
-    async def _tts(self, text: str) -> str:
-        payload = {"text": text, "voice": "warm_teacher", "language": "vi"}
+    async def _tts(self, text: str, voice_id: str | None = None) -> str:
+        payload: dict[str, str] = {"text": text, "voice": voice_id or "warm_teacher", "language": "vi"}
         data = await self._request_with_retry(
             f"{settings.tts_url}/synthesize",
             payload,
