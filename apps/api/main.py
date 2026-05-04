@@ -14,10 +14,13 @@ from routers import (
     auth_router,
     classes_router,
     health,
+    knowledge_router,
+    memory_router,
     parents_router,
     progress,
     sessions,
     users_router,
+    voice_router,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -54,6 +57,9 @@ def create_app() -> FastAPI:
     application.include_router(parents_router.router)
     application.include_router(sessions.router)
     application.include_router(progress.router)
+    application.include_router(knowledge_router.router)
+    application.include_router(memory_router.router)
+    application.include_router(voice_router.router)
 
     return application
 

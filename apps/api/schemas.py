@@ -139,3 +139,93 @@ class ClassMemberAddRequest(BaseModel):
 class ParentChildRequest(BaseModel):
     parent_email: str = Field(min_length=3, max_length=150)
     child_email: str = Field(min_length=3, max_length=150)
+
+
+# --- Knowledge Base Schemas ---
+
+class KnowledgeDocumentResponse(BaseModel):
+    doc_id: str
+    teacher_email: str
+    title: str
+    subject: str
+    grade_level: str
+    file_type: str
+    original_filename: str
+    chunk_count: int
+    created_at: datetime
+
+
+class KnowledgeUploadRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    subject: str = Field(default="math", max_length=50)
+    grade_level: str = Field(default="grade6", max_length=50)
+
+
+class ClassKnowledgeLinkRequest(BaseModel):
+    doc_id: str = Field(min_length=1, max_length=200)
+
+
+# --- Student Memory Schemas ---
+
+class StudentProfileResponse(BaseModel):
+    student_email: str
+    learning_style: str
+    difficulty_level: str
+    preferred_language: str
+    strengths: str
+    weaknesses: str
+    notes: str
+    updated_at: datetime
+
+
+class StudentProfileUpdateRequest(BaseModel):
+    learning_style: str | None = Field(default=None, max_length=50)
+    difficulty_level: str | None = Field(default=None, max_length=50)
+    strengths: str | None = Field(default=None, max_length=2000)
+    weaknesses: str | None = Field(default=None, max_length=2000)
+    notes: str | None = Field(default=None, max_length=2000)
+
+
+class LearningMemoryResponse(BaseModel):
+    memory_id: int
+    student_email: str
+    session_id: str
+    summary: str
+    topics_covered: str
+    mistakes_made: str
+    mastery_score: float
+    created_at: datetime
+
+
+class SkillAssessmentResponse(BaseModel):
+    id: int
+    student_email: str
+    topic: str
+    sub_skill: str
+    correct_count: int
+    total_attempts: int
+    mastery_rate: float = 0.0
+    last_assessed_at: datetime
+
+
+# --- Voice Cloning Schemas ---
+
+class VoiceProfileCreateRequest(BaseModel):
+    voice_name: str = Field(min_length=1, max_length=100)
+    provider: str = Field(default="gtts", max_length=50)
+
+
+class VoiceProfileResponse(BaseModel):
+    profile_id: str
+    teacher_email: str
+    voice_name: str
+    provider: str
+    model_path: str | None = None
+    external_voice_id: str | None = None
+    sample_count: int
+    status: str
+    created_at: datetime
+
+
+class ClassVoiceSettingRequest(BaseModel):
+    voice_profile_id: str = Field(min_length=1, max_length=200)

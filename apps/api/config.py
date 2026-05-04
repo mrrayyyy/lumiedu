@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     auth_disabled: bool = False
     bootstrap_admin_email: str = "admin@lumiedu.local"
     bootstrap_admin_password: str = "Admin123!"
+    knowledge_url: str = "http://knowledge-service:8104"
     cors_allowed_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
     login_rate_limit_attempts: int = 10
     login_rate_limit_window_seconds: int = 300

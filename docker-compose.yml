@@ -42,6 +42,7 @@ services:
       AUTH_DISABLED: ${AUTH_DISABLED:-false}
       BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-admin@lumiedu.local}
       BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-Admin123!}
+      KNOWLEDGE_URL: ${KNOWLEDGE_URL:-http://knowledge-service:8104}
     depends_on:
       stt-service:
         condition: service_healthy
@@ -163,6 +164,30 @@ services:
     networks:
       - lumiedu-net
 
+  knowledge-service:
+    build:
+      context: ./services/knowledge-service
+      dockerfile: Dockerfile
+    container_name: lumiedu-knowledge
+    ports:
+      - "${KNOWLEDGE_PORT:-8104}:8104"
+    environment:
+      CHROMADB_PERSIST_DIR: ${CHROMADB_PERSIST_DIR:-/app/chromadb_data}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-all-MiniLM-L6-v2}
+      UPLOAD_DIR: ${UPLOAD_DIR:-/app/uploads}
+      MAX_CHUNK_SIZE: ${MAX_CHUNK_SIZE:-800}
+      TOP_K_RESULTS: ${TOP_K_RESULTS:-5}
+    volumes:
+      - lumiedu-knowledge-data:/app/chromadb_data
+      - lumiedu-knowledge-uploads:/app/uploads
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys;sys.exit(0 if urllib.request.urlopen('http://localhost:8104/health').status==200 else 1)"]
+      interval: 10s
+      timeout: 4s
+      retries: 8
+    networks:
+      - lumiedu-net
+
   reverse-proxy:
     image: nginx:1.27-alpine
     container_name: lumiedu-proxy
@@ -194,3 +219,5 @@ volumes:
   lumiedu-redis-data:
   lumiedu-whisper-cache:
   lumiedu-tts-cache:
+  lumiedu-knowledge-data:
+  lumiedu-knowledge-uploads:
