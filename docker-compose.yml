@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   frontend:
     build:
@@ -43,6 +41,11 @@ services:
       BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-admin@lumiedu.local}
       BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-Admin123!}
       KNOWLEDGE_URL: ${KNOWLEDGE_URL:-http://knowledge-service:8104}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+      LOGIN_RATE_LIMIT_ATTEMPTS: ${LOGIN_RATE_LIMIT_ATTEMPTS:-10}
+      LOGIN_RATE_LIMIT_WINDOW_SECONDS: ${LOGIN_RATE_LIMIT_WINDOW_SECONDS:-300}
+      SESSION_CREATE_RATE_LIMIT: ${SESSION_CREATE_RATE_LIMIT:-20}
+      SESSION_CREATE_RATE_WINDOW_SECONDS: ${SESSION_CREATE_RATE_WINDOW_SECONDS:-300}
     depends_on:
       stt-service:
         condition: service_healthy
@@ -76,6 +79,8 @@ services:
       WHISPER_COMPUTE_TYPE: ${WHISPER_COMPUTE_TYPE:-int8}
       WHISPER_BEAM_SIZE: ${WHISPER_BEAM_SIZE:-5}
       WHISPER_VAD_ENABLED: ${WHISPER_VAD_ENABLED:-true}
+      WHISPER_VAD_MIN_SILENCE_MS: ${WHISPER_VAD_MIN_SILENCE_MS:-300}
+      STT_DEFAULT_LANGUAGE: ${STT_DEFAULT_LANGUAGE:-vi}
     volumes:
       - lumiedu-whisper-cache:/root/.cache/huggingface
     healthcheck:
@@ -92,12 +97,13 @@ services:
       dockerfile: Dockerfile
     container_name: lumiedu-llm
     ports:
-      - "8102:8102"
+      - "${LLM_PORT:-8102}:8102"
     environment:
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2:3b}
       OLLAMA_TIMEOUT: ${OLLAMA_TIMEOUT:-30}
       MAX_HISTORY_TURNS: ${MAX_HISTORY_TURNS:-10}
+      MAX_RESPONSE_TOKENS: ${MAX_RESPONSE_TOKENS:-256}
       LLM_TEMPERATURE: ${LLM_TEMPERATURE:-0.7}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys;sys.exit(0 if urllib.request.urlopen('http://localhost:8102/health').status==200 else 1)"]
@@ -120,6 +126,8 @@ services:
       TTS_GTTS_LANGUAGE: ${TTS_GTTS_LANGUAGE:-vi}
       TTS_GTTS_SLOW: ${TTS_GTTS_SLOW:-true}
       TTS_MAX_CACHE_FILES: ${TTS_MAX_CACHE_FILES:-500}
+      TTS_AUDIO_CACHE_DIR: ${TTS_AUDIO_CACHE_DIR:-/app/audio_cache}
+      TTS_DEFAULT_VOICE: ${TTS_DEFAULT_VOICE:-warm_teacher}
     volumes:
       - lumiedu-tts-cache:/app/audio_cache
     healthcheck:
@@ -176,6 +184,8 @@ services:
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-all-MiniLM-L6-v2}
       UPLOAD_DIR: ${UPLOAD_DIR:-/app/uploads}
       MAX_CHUNK_SIZE: ${MAX_CHUNK_SIZE:-800}
+      CHUNK_OVERLAP: ${CHUNK_OVERLAP:-100}
+      MAX_FILE_SIZE_MB: ${MAX_FILE_SIZE_MB:-20}
       TOP_K_RESULTS: ${TOP_K_RESULTS:-5}
     volumes:
       - lumiedu-knowledge-data:/app/chromadb_data
